@@ -1,0 +1,4 @@
+@import '../style.css';
+
+#root { min-height: 100vh; }
+.lucide { width: 16px; height: 16px; flex: none; stroke-width: 1.8; }
