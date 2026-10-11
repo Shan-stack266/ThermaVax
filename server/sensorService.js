@@ -8,6 +8,7 @@ const CRITICAL_HIGH_C = 10;
 const HARDWARE_STATUSES = new Set(['SAFE', 'WARNING', 'CRITICAL', 'SENSOR ERROR']);
 const STANDALONE_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{3,80}$/;
 const STANDALONE_SENSOR_STATUSES = new Set(['CRITICAL LOW', 'SAFE', 'WARNING', 'CRITICAL HIGH']);
+const SHIPMENT_DEVICE_STATUSES = ['Dispatched', 'In Transit', 'Arrived'];
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -81,6 +82,11 @@ function standaloneTemperatureStatus(temperature) {
   return 'CRITICAL HIGH';
 }
 
+function shipmentTemperatureStatusFromDevice(status) {
+  if (status === 'CRITICAL LOW' || status === 'CRITICAL HIGH') return 'CRITICAL';
+  return status;
+}
+
 function hardwareConnection(recordedAt) {
   if (!recordedAt) return { device_connection: 'No readings', reading_stale: true };
   const ageMs = Date.now() - new Date(recordedAt).getTime();
@@ -88,6 +94,27 @@ function hardwareConnection(recordedAt) {
     device_connection: Number.isFinite(ageMs) && ageMs <= HARDWARE_STALE_MS ? 'Reporting' : 'Stale',
     reading_stale: !Number.isFinite(ageMs) || ageMs > HARDWARE_STALE_MS
   };
+}
+
+function isMissingDeviceAssignmentColumn(error) {
+  return error && (
+    error.code === '42703'
+    || error.code === 'PGRST204'
+    || /esp32_device_id|schema cache|column/i.test(error.message || '')
+  );
+}
+
+async function activeShipmentForDevice(client, deviceId) {
+  const result = await client.from('shipments')
+    .select('id, tracking_code, status, esp32_device_id')
+    .eq('esp32_device_id', deviceId)
+    .in('status', SHIPMENT_DEVICE_STATUSES)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (isMissingDeviceAssignmentColumn(result.error)) return null;
+  if (result.error) unwrap(result);
+  return result.data || null;
 }
 
 async function recordStandaloneSensorReading(client, payload = {}) {
@@ -101,10 +128,25 @@ async function recordStandaloneSensorReading(client, payload = {}) {
     temperature: numericTemperature,
     status: computedStatus
   }).select('id, device_id, temperature, status, created_at').single());
+  const activeShipment = await activeShipmentForDevice(client, deviceId);
+  let shipmentReading = null;
+  if (activeShipment) {
+    shipmentReading = await recordTemperature(
+      client,
+      activeShipment.id,
+      numericTemperature,
+      reading.created_at,
+      'esp32',
+      shipmentTemperatureStatusFromDevice(computedStatus)
+    );
+  }
   return {
     ...reading,
     reported_status: reportedStatus,
-    status_mismatch: Boolean(reportedStatus && reportedStatus !== computedStatus)
+    status_mismatch: Boolean(reportedStatus && reportedStatus !== computedStatus),
+    assigned_shipment_id: activeShipment?.id || null,
+    assigned_tracking_code: activeShipment?.tracking_code || null,
+    shipment_temperature_reading_id: shipmentReading?.id || null
   };
 }
 
@@ -163,7 +205,9 @@ module.exports = {
   recordTemperature,
   recordGps,
   recordStandaloneSensorReading,
+  normalizeDeviceId,
   temperatureStatus,
   standaloneTemperatureStatus,
+  shipmentTemperatureStatusFromDevice,
   hardwareConnection
 };

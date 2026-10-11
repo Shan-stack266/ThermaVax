@@ -23,6 +23,7 @@ export function ShipmentTable({ shipments, title, compact = false, onShipment, o
     { key: 'tracking_code', label: 'Tracking', render: item => <><strong>{item.tracking_code}</strong><span className="mono">{item.total_quantity} doses</span></> },
     { key: 'route', label: 'Route', sortValue: item => `${item.origin} ${item.destination}`, render: item => <>{item.origin}<span className="mono">to {item.destination}</span></> },
     { key: 'assigned_personnel', label: 'Personnel' },
+    { key: 'esp32_device_id', label: 'ESP32', render: item => item.esp32_device_id ? <><strong>{item.esp32_device_id}</strong><span className="mono">{item.device_connection}</span></> : 'Not assigned' },
     { key: 'expected_delivery_date', label: 'Expected', render: item => formatDate(item.expected_delivery_date) },
     { key: 'current_temperature', label: 'Temperature', render: temperatureCell },
     { key: 'active_alerts', label: 'Alerts', render: item => item.active_alerts ? <StatusBadge>{`${item.active_alerts} Active`}</StatusBadge> : 'None' },

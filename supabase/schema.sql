@@ -77,11 +77,16 @@ create table if not exists public.shipments (
   dispatch_date timestamptz,
   expected_delivery_date timestamptz not null,
   assigned_personnel text not null,
+  esp32_device_id text,
   status public.shipment_status not null default 'Preparing',
   created_by uuid not null default auth.uid() references public.profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint shipments_distinct_route check (origin <> destination),
+  constraint shipments_esp32_device_id_format check (
+    esp32_device_id is null
+    or esp32_device_id ~ '^[A-Za-z0-9._:-]{3,80}$'
+  ),
   constraint shipments_valid_dates check (dispatch_date is null or expected_delivery_date > dispatch_date)
 );
 
@@ -169,6 +174,9 @@ create index if not exists idx_shipments_expected_delivery on public.shipments(e
 create index if not exists idx_temperature_shipment_time on public.temperature_readings(shipment_id, recorded_at desc);
 create index if not exists idx_gps_shipment_time on public.gps_readings(shipment_id, recorded_at desc);
 create index if not exists idx_alerts_status_time on public.alerts(status, recorded_at desc);
+create unique index if not exists idx_shipments_active_esp32_device
+on public.shipments(esp32_device_id)
+where esp32_device_id is not null and status <> 'Delivered';
 create index if not exists idx_alert_acknowledgements_user on public.alert_acknowledgements(acknowledged_by, acknowledged_at desc);
 create index if not exists idx_rider_assignments_rider on public.rider_assignments(rider_id, status);
 

@@ -2,7 +2,7 @@ const express = require('express');
 const QRCode = require('qrcode');
 const { authenticate, requireRole } = require('./auth');
 const { createAnonymousClient, createServiceClient, createUserClient, unwrap } = require('./supabase');
-const { recordTemperature, recordGps, allowedRange, temperatureStatus, hardwareConnection } = require('./sensorService');
+const { recordTemperature, recordGps, allowedRange, temperatureStatus, hardwareConnection, normalizeDeviceId } = require('./sensorService');
 const { SHIPMENT_STATUSES, validateShipmentTransition, validateDeliveryConfirmation } = require('./validation');
 const { loginLimiter, confirmationLimiter, passwordResetLimiter, publicTrackingLimiter, qrLimiter } = require('./security');
 
@@ -159,6 +159,34 @@ function isActiveDelivery(shipment) {
 
 function isShipmentQueueItem(shipment) {
   return shipment.status !== 'Delivered' && !isActiveDelivery(shipment);
+}
+
+function isMissingDeviceAssignmentColumn(error) {
+  return error && (
+    error.code === '42703'
+    || error.code === 'PGRST204'
+    || /esp32_device_id|schema cache|column/i.test(error.message || '')
+  );
+}
+
+async function activeDeviceAssignments(client) {
+  const result = await client.from('shipments')
+    .select('id, tracking_code, status, esp32_device_id')
+    .not('esp32_device_id', 'is', null)
+    .neq('status', 'Delivered');
+  if (isMissingDeviceAssignmentColumn(result.error)) {
+    throw httpError('Apply supabase/esp32-device-assignment-migration.sql before assigning ESP32 devices to shipments.', 409);
+  }
+  return unwrap(result);
+}
+
+async function assertDeviceAvailable(client, deviceId) {
+  if (!deviceId) return;
+  const assignments = await activeDeviceAssignments(client);
+  const assigned = assignments.find(item => item.esp32_device_id === deviceId);
+  if (assigned) {
+    throw httpError(`ESP32 device ${deviceId} is already assigned to shipment ${assigned.tracking_code}.`, 409);
+  }
 }
 
 async function shipmentDetail(client, id) {
@@ -515,6 +543,33 @@ router.get('/sensor-readings/latest', authenticate, route(async (req, res) => {
     .limit(limit)));
 }));
 
+router.get('/sensor-devices', authenticate, requireRole('admin'), route(async (req, res) => {
+  const client = createServiceClient() || req.supabase;
+  const readings = unwrap(await client.from('sensor_readings')
+    .select('device_id, temperature, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(200));
+  const latestByDevice = new Map();
+  readings.forEach(reading => {
+    if (!latestByDevice.has(reading.device_id)) latestByDevice.set(reading.device_id, reading);
+  });
+  const assignments = await activeDeviceAssignments(client);
+  const assignmentByDevice = new Map(assignments.map(item => [item.esp32_device_id, item]));
+  res.json([...latestByDevice.values()].map(reading => {
+    const assignment = assignmentByDevice.get(reading.device_id);
+    return {
+      device_id: reading.device_id,
+      latest_temperature: reading.temperature,
+      status: reading.status,
+      last_seen: reading.created_at,
+      available: !assignment,
+      assigned_shipment_id: assignment?.id || null,
+      assigned_tracking_code: assignment?.tracking_code || null,
+      assigned_status: assignment?.status || null
+    };
+  }));
+}));
+
 router.get('/batches', authenticate, route(async (req, res) => {
   res.json(unwrap(await req.supabase.from('batch_inventory').select('*').order('expiration_date')));
 }));
@@ -628,9 +683,11 @@ router.post('/shipments', authenticate, requireRole('admin'), route(async (req, 
     batch_id: text(item.batch_id, 'Batch'),
     quantity: positiveInteger(item.quantity, 'Assigned quantity')
   }));
+  const esp32DeviceId = req.body.esp32_device_id ? normalizeDeviceId(req.body.esp32_device_id) : null;
   const expectedDelivery = dateValue(req.body.expected_delivery_date, 'Expected delivery date');
   const dispatchDate = dateValue(req.body.dispatch_date, 'Dispatch date', true);
   if (dispatchDate && expectedDelivery <= dispatchDate) throw httpError('Expected delivery must be after dispatch', 400);
+  await assertDeviceAvailable(createServiceClient() || req.supabase, esp32DeviceId);
   const shipment = unwrap(await req.supabase.rpc('create_shipment', {
     p_origin: text(req.body.origin, 'Origin'),
     p_destination: text(req.body.destination, 'Destination'),
@@ -640,6 +697,17 @@ router.post('/shipments', authenticate, requireRole('admin'), route(async (req, 
     p_batches: batches,
     p_status: SHIPMENT_STATUSES.includes(req.body.status) ? req.body.status : 'Preparing'
   }));
+  if (esp32DeviceId) {
+    const assignmentResult = await (createServiceClient() || req.supabase).from('shipments')
+      .update({ esp32_device_id: esp32DeviceId })
+      .eq('id', shipment.id)
+      .select('id')
+      .single();
+    if (isMissingDeviceAssignmentColumn(assignmentResult.error)) {
+      throw httpError('Apply supabase/esp32-device-assignment-migration.sql before assigning ESP32 devices to shipments.', 409);
+    }
+    unwrap(assignmentResult);
+  }
   res.status(201).json(await shipmentDetail(req.supabase, shipment.id));
 }));
 

@@ -72,6 +72,7 @@ function ShipmentOverview({ shipment, showRiderConfirmation = true }) {
       <DetailItem label="Expected delivery">{formatDate(shipment.expected_delivery_date)}</DetailItem>
       <DetailItem label="Assigned quantity">{shipment.total_quantity} doses</DetailItem>
       <DetailItem label="Allowed temperature">{shipment.temperature_range.min_temperature} to {shipment.temperature_range.max_temperature} C</DetailItem>
+      <DetailItem label="ESP32 device">{shipment.esp32_device_id || 'Not assigned'}</DetailItem>
       {showRiderConfirmation && <DetailItem label="Rider confirmation">{riderConfirmation}</DetailItem>}
       {shipment.dispatch_date && <DetailItem label="Dispatch">{formatDate(shipment.dispatch_date)}</DetailItem>}
     </div>
