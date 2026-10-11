@@ -62,6 +62,10 @@ running background process, so this deployment is appropriate for request-based
 ingestion, not for any future design that requires persistent sockets, MQTT listeners,
 or long-running hardware workers.
 
+For the browser live ESP32 panel, also set the browser-facing Vite variables
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are not secret values, but
+`SUPABASE_SECRET_KEY` and `THERMAVAX_DEVICE_KEY` must remain server/device-only.
+
 Create the first account in Supabase Authentication, then promote it in the SQL Editor:
 
 ```sql
@@ -116,6 +120,11 @@ User Management, then use that rider's email name in the shipment assignment fie
 To store and display the ESP32-reported status exactly, run
 `supabase/hardware-temperature-status-migration.sql` once in the Supabase SQL Editor.
 
+For standalone ESP32 DS18B20 readings stored in `public.sensor_readings`, run
+`supabase/sensor-readings-access-migration.sql` once in the Supabase SQL Editor.
+This enables authenticated dashboard reads and Supabase Realtime events for new
+rows without allowing browser users to insert device readings.
+
 ## Hardware ingestion
 
 ESP32/GSM devices can send JSON to:
@@ -143,6 +152,18 @@ Temperature payload:
 the server stores the receipt time. The dashboard recomputes display status from
 the stored reading when no hardware status is stored and marks a device stale when
 no recent reading is available.
+
+Standalone device payload:
+
+```json
+{"device_id":"esp32-device-001","temperature":4.2,"status":"SAFE"}
+```
+
+Standalone readings are written to the existing `public.sensor_readings` table.
+The server validates the device ID and temperature, checks any submitted status,
+then stores the server-computed status using the ESP32 thresholds: below 2 C is
+`CRITICAL LOW`, 2 C to below 8 C is `SAFE`, 8 C to below 11 C is `WARNING`, and
+11 C or above is `CRITICAL HIGH`.
 
 GPS payload:
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const { timingSafeEqual } = require('node:crypto');
 const { createServiceClient } = require('./supabase');
-const { recordTemperature, recordGps } = require('./sensorService');
+const { recordTemperature, recordGps, recordStandaloneSensorReading } = require('./sensorService');
 const { hardwareLimiter } = require('./security');
 
 const router = express.Router();
@@ -27,8 +27,10 @@ router.use((req, res, next) => {
 
 router.post('/temperature', async (req, res, next) => {
   try {
-    const reading = await recordTemperature(req.supabase, req.body.shipment_id || req.body.tracking_code,
-      req.body.temperature, req.body.recorded_at, 'esp32', req.body.temperature_status);
+    const shipmentIdentifier = req.body.shipment_id || req.body.tracking_code;
+    const reading = shipmentIdentifier
+      ? await recordTemperature(req.supabase, shipmentIdentifier, req.body.temperature, req.body.recorded_at, 'esp32', req.body.temperature_status)
+      : await recordStandaloneSensorReading(req.supabase, req.body);
     res.status(201).json(reading);
   } catch (error) { next(error); }
 });

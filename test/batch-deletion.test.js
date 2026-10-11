@@ -105,6 +105,20 @@ test('shipment deletion permits unfinished shipments', async () => {
   assert.equal(res.statusCode, 204);
 });
 
+const userDeletion = router.stack.find(layer => layer.route?.path === '/users/:id' && layer.route.methods.delete).route;
+
+test('user deletion rejects self-deletion', async () => {
+  const res = response();
+  let error;
+  await userDeletion.stack.at(-1).handle({
+    params: { id: 'admin-id' },
+    user: { id: 'admin-id', role: 'admin' }
+  }, res, value => { error = value; });
+  assert.equal(error.status, 409);
+  assert.match(error.message, /delete your own account/);
+  assert.equal(res.ended, undefined);
+});
+
 test('delivery archive contains batch allocations and actual received quantity separately', async () => {
   const deliveryRoute = router.stack.find(layer => layer.route?.path === '/deliveries' && layer.route.methods.get).route;
   const deliveries = [{ id: 'delivery-id', shipment_id: 'shipment-id', quantity_received: 8, shipments: { tracking_code: 'TVX-1', destination: 'Health center', shipment_batches: [{ quantity: 10, batches: { id: 'batch-id', vaccine_name: 'Vaccine', batch_number: 'B-1' } }] } }];

@@ -1,3 +1,6 @@
-const createApp = require('../server/app');
 
-module.exports = createApp();
+'use strict';
+
+const app = require('../server.js');
+
+module.exports = app;

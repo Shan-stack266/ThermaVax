@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validateShipmentTransition, validateDeliveryConfirmation } = require('../server/validation');
+const { standaloneTemperatureStatus } = require('../server/sensorService');
 
 test('rider shipment transitions move forward one step', () => {
   assert.doesNotThrow(() => validateShipmentTransition('Preparing', 'Dispatched', 'rider'));
@@ -27,4 +28,14 @@ test('delivery confirmation requires an arrived shipment and valid quantity', ()
   assert.throws(() => validateDeliveryConfirmation({ ...shipment, status: 'In Transit' }, 20), /must be Arrived/);
   assert.throws(() => validateDeliveryConfirmation(shipment, 21), /cannot exceed/);
   assert.throws(() => validateDeliveryConfirmation({ ...shipment, delivery: {} }, 20), /already been confirmed/);
+});
+
+test('standalone ESP32 readings use device monitoring thresholds', () => {
+  assert.equal(standaloneTemperatureStatus(1.9), 'CRITICAL LOW');
+  assert.equal(standaloneTemperatureStatus(2), 'SAFE');
+  assert.equal(standaloneTemperatureStatus(7.99), 'SAFE');
+  assert.equal(standaloneTemperatureStatus(8), 'WARNING');
+  assert.equal(standaloneTemperatureStatus(10.99), 'WARNING');
+  assert.equal(standaloneTemperatureStatus(11), 'CRITICAL HIGH');
+  assert.throws(() => standaloneTemperatureStatus('not-a-number'), /Temperature must be a number/);
 });

@@ -6,6 +6,8 @@ const SAFE_MAX_C = 8;
 const CRITICAL_LOW_C = 0;
 const CRITICAL_HIGH_C = 10;
 const HARDWARE_STATUSES = new Set(['SAFE', 'WARNING', 'CRITICAL', 'SENSOR ERROR']);
+const STANDALONE_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{3,80}$/;
+const STANDALONE_SENSOR_STATUSES = new Set(['CRITICAL LOW', 'SAFE', 'WARNING', 'CRITICAL HIGH']);
 
 function httpError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -45,6 +47,22 @@ function normalizeHardwareStatus(value) {
   return status;
 }
 
+function normalizeStandaloneSensorStatus(value) {
+  if (value == null || value === '') return null;
+  const status = String(value).trim().toUpperCase();
+  if (!STANDALONE_SENSOR_STATUSES.has(status)) throw httpError('Device temperature status is invalid', 400);
+  return status;
+}
+
+function normalizeDeviceId(value) {
+  const deviceId = String(value ?? '').trim();
+  if (!deviceId) throw httpError('Device ID is required', 400);
+  if (!STANDALONE_DEVICE_ID_PATTERN.test(deviceId)) {
+    throw httpError('Device ID must be 3-80 characters and contain only letters, numbers, dot, underscore, colon, or dash', 400);
+  }
+  return deviceId;
+}
+
 function temperatureStatus(temperature, hardwareStatus = null) {
   const normalizedStatus = normalizeHardwareStatus(hardwareStatus);
   if (normalizedStatus) return normalizedStatus;
@@ -54,12 +72,39 @@ function temperatureStatus(temperature, hardwareStatus = null) {
   return numericTemperature < SAFE_MIN_C || numericTemperature > SAFE_MAX_C ? 'WARNING' : 'SAFE';
 }
 
+function standaloneTemperatureStatus(temperature) {
+  const numericTemperature = Number(temperature);
+  if (!Number.isFinite(numericTemperature)) throw httpError('Temperature must be a number', 400);
+  if (numericTemperature < 2) return 'CRITICAL LOW';
+  if (numericTemperature < 8) return 'SAFE';
+  if (numericTemperature < 11) return 'WARNING';
+  return 'CRITICAL HIGH';
+}
+
 function hardwareConnection(recordedAt) {
   if (!recordedAt) return { device_connection: 'No readings', reading_stale: true };
   const ageMs = Date.now() - new Date(recordedAt).getTime();
   return {
     device_connection: Number.isFinite(ageMs) && ageMs <= HARDWARE_STALE_MS ? 'Reporting' : 'Stale',
     reading_stale: !Number.isFinite(ageMs) || ageMs > HARDWARE_STALE_MS
+  };
+}
+
+async function recordStandaloneSensorReading(client, payload = {}) {
+  const deviceId = normalizeDeviceId(payload.device_id);
+  const numericTemperature = Number(payload.temperature);
+  if (!Number.isFinite(numericTemperature)) throw httpError('Temperature must be a number', 400);
+  const reportedStatus = normalizeStandaloneSensorStatus(payload.status);
+  const computedStatus = standaloneTemperatureStatus(numericTemperature);
+  const reading = unwrap(await client.from('sensor_readings').insert({
+    device_id: deviceId,
+    temperature: numericTemperature,
+    status: computedStatus
+  }).select('id, device_id, temperature, status, created_at').single());
+  return {
+    ...reading,
+    reported_status: reportedStatus,
+    status_mismatch: Boolean(reportedStatus && reportedStatus !== computedStatus)
   };
 }
 
@@ -112,4 +157,13 @@ async function recordGps(client, identifier, latitude, longitude, recordedAt, so
   }).select().single());
 }
 
-module.exports = { findShipment, allowedRange, recordTemperature, recordGps, temperatureStatus, hardwareConnection };
+module.exports = {
+  findShipment,
+  allowedRange,
+  recordTemperature,
+  recordGps,
+  recordStandaloneSensorReading,
+  temperatureStatus,
+  standaloneTemperatureStatus,
+  hardwareConnection
+};

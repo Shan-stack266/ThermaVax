@@ -18,6 +18,10 @@ export function hasSession() {
   return Boolean(token);
 }
 
+export function getAccessToken() {
+  return token;
+}
+
 export function apiUrl(path) {
   return `${apiOrigin}${path}`;
 }

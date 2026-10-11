@@ -430,6 +430,27 @@ router.patch('/users/:id/status', authenticate, requireRole('admin'), route(asyn
   res.json(user);
 }));
 
+router.delete('/users/:id', authenticate, requireRole('admin'), route(async (req, res) => {
+  if (req.params.id === req.user.id) throw httpError('You cannot delete your own account', 409);
+  const service = createServiceClient();
+  if (!service) throw httpError('User deletion requires SUPABASE_SECRET_KEY on the server', 503);
+  unwrap(await service.from('profiles')
+    .select('id')
+    .eq('id', req.params.id)
+    .single());
+  const { error } = await service.auth.admin.deleteUser(req.params.id);
+  if (error) {
+    const linked = /foreign key|referenced|violates|constraint/i.test(error.message || '');
+    throw httpError(
+      linked
+        ? 'This user is linked to operational records and cannot be deleted. Disable the account instead.'
+        : error.message,
+      linked ? 409 : error.status || 400
+    );
+  }
+  res.status(204).end();
+}));
+
 router.get('/dashboard', authenticate, route(async (req, res) => {
   const [batchResult, shipmentResult, alertResult] = await Promise.all([
     req.supabase.from('batch_inventory').select('*').order('expiration_date'),
@@ -483,6 +504,14 @@ router.get('/dashboard', authenticate, route(async (req, res) => {
     active_shipments: activeShipments,
     recent_shipments: shipments.slice(0, 5)
   });
+}));
+
+router.get('/sensor-readings/latest', authenticate, route(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+  res.json(unwrap(await req.supabase.from('sensor_readings')
+    .select('id, device_id, temperature, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit)));
 }));
 
 router.get('/batches', authenticate, route(async (req, res) => {

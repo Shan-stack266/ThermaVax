@@ -1,4 +1,5 @@
 import useApiData from '../hooks/useApiData';
+import useSensorReadings from '../hooks/useSensorReadings';
 import { ErrorState, LoadingState, PanelHeader, SectionHeading, Stat, StatusBadge } from '../components/Common';
 import DashboardCharts from '../components/DashboardCharts';
 import { AlertPanel, ShipmentTable, WarningPanel } from './shared';
@@ -24,8 +25,48 @@ function HardwareStatusPanel({ shipments, onShipment }) {
   </section>;
 }
 
+function SensorReadingsPanel({ state }) {
+  const latest = state.latest;
+  return <section className="panel hardware-panel sensor-readings-panel">
+    <PanelHeader
+      title="ESP32 device monitor"
+      description="Latest standalone DS18B20 reading stored in Supabase"
+      action={<StatusBadge>{state.realtimeStatus}</StatusBadge>}
+    />
+    {state.error && <div className="inline-error">Sensor readings unavailable: {state.error}</div>}
+    {latest ? <>
+      <div className="sensor-live">
+        <div>
+          <span>Device</span>
+          <strong>{latest.device_id}</strong>
+        </div>
+        <div>
+          <span>Temperature</span>
+          <strong>{Number(latest.temperature).toFixed(2)} C</strong>
+        </div>
+        <div>
+          <span>Status</span>
+          <StatusBadge>{latest.status}</StatusBadge>
+        </div>
+        <div>
+          <span>Updated</span>
+          <strong>{formatDate(latest.created_at)}</strong>
+        </div>
+      </div>
+      <div className="sensor-recent">
+        {state.readings.slice(1, 5).map(reading => <div className="list-row" key={reading.id}>
+          <span><strong>{reading.device_id}</strong><small>{formatDate(reading.created_at)}</small></span>
+          <span>{Number(reading.temperature).toFixed(2)} C</span>
+          <StatusBadge>{reading.status}</StatusBadge>
+        </div>)}
+      </div>
+    </> : <div className="compact-empty">{state.loading ? 'Loading ESP32 readings...' : 'No standalone ESP32 reading has been saved yet.'}</div>}
+  </section>;
+}
+
 export default function OverviewPage({ user, refreshKey, openBatch, openShipment, navigate }) {
   const { data, error, loading } = useApiData('/api/dashboard', refreshKey, { refreshIntervalMs: 5000 });
+  const sensorReadings = useSensorReadings(refreshKey);
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
   const staff = user.role === 'staff';
@@ -40,6 +81,7 @@ export default function OverviewPage({ user, refreshKey, openBatch, openShipment
       <Stat label="Active alerts" value={data.counts.active_alerts} tone={data.counts.active_alerts ? 'danger' : ''} />
     </div>
     {!rider && <DashboardCharts charts={data.charts} />}
+    <SensorReadingsPanel state={sensorReadings} />
     <HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} />
     <div className="overview-grid">{rider ? <AlertPanel alerts={data.alerts} onShipment={openShipment} /> : staff ? <><AlertPanel alerts={data.alerts} onShipment={openShipment} /><WarningPanel warnings={data.warnings} onBatch={openBatch} /></> : <><WarningPanel warnings={data.warnings} onBatch={openBatch} /><AlertPanel alerts={data.alerts} onShipment={openShipment} /></>}</div>
     <ShipmentTable shipments={staff || rider ? data.active_shipments : data.recent_shipments} title={staff || rider ? 'Active shipment queue' : 'Recent shipments'} compact onShipment={openShipment} onViewAll={() => navigate('shipments')} riderMode={rider} showAssignmentStatus={rider} />

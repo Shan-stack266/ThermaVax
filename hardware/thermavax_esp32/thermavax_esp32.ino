@@ -21,10 +21,11 @@
 const char* WIFI_SSID = "CHANGE_ME";
 const char* WIFI_PASSWORD = "CHANGE_ME";
 // Use your deployed HTTPS URL for final testing, or your computer LAN IP for local testing.
+// Example deployed URL: https://www.thermavax.site/api/hardware/temperature
 // Example local URL: http://192.168.1.25:3000/api/hardware/temperature
-const char* API_URL = "http://192.168.1.27:3000/api/hardware/temperature";
-const char* DEVICE_KEY = "a59b076a9f0d2e2ac0919f230e735ef52c89096a90ab243f944d90de00e56197";
-const char* TRACKING_CODE = "TVX-34F8063FE490";
+const char* API_URL = "https://www.thermavax.site/api/hardware/temperature";
+const char* DEVICE_KEY = "CHANGE_ME_DEVICE_KEY";
+const char* DEVICE_ID = "esp32-device-001";
 
 // Replace with the PEM CA certificate for the API host before deployment.
 // Certificate verification remains enabled; an unset/invalid certificate fails closed.
@@ -32,12 +33,11 @@ static const char* API_ROOT_CA = "-----BEGIN CERTIFICATE-----\\nREPLACE_WITH_YOU
 
 const float SAFE_MIN_C = 2.0f;
 const float SAFE_MAX_C = 8.0f;
-const float CRITICAL_LOW_C = 0.0f;
-const float CRITICAL_HIGH_C = 10.0f;
+const float WARNING_MAX_C = 11.0f;
 const unsigned long SENSOR_INTERVAL_MS = 1000;
 const unsigned long UPLOAD_INTERVAL_MS = 5000;
 const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
-const uint16_t HTTP_TIMEOUT_MS = 5000;
+const uint16_t HTTP_TIMEOUT_MS = 2500;
 
 OneWire oneWire(TEMP_PIN);
 DallasTemperature sensor(&oneWire);
@@ -50,23 +50,25 @@ unsigned long lastWifiAttempt = WIFI_RETRY_INTERVAL_MS;
 bool lastUploadSucceeded = false;
 int lastUploadStatusCode = 0;
 
-enum Status { SAFE, WARNING, CRITICAL, SENSOR_ERROR };
+enum Status { CRITICAL_LOW, SAFE, WARNING, CRITICAL_HIGH, SENSOR_ERROR };
 Status status = SENSOR_ERROR;
 
 const char* statusText() {
   switch (status) {
+    case CRITICAL_LOW: return "CRITICAL LOW";
     case SAFE: return "SAFE";
     case WARNING: return "WARNING";
-    case CRITICAL: return "CRITICAL";
+    case CRITICAL_HIGH: return "CRITICAL HIGH";
     default: return "SENSOR ERROR";
   }
 }
 
 void updateStatus() {
   if (!sensorOK) status = SENSOR_ERROR;
-  else if (temperatureC < CRITICAL_LOW_C || temperatureC > CRITICAL_HIGH_C) status = CRITICAL;
-  else if (temperatureC < SAFE_MIN_C || temperatureC > SAFE_MAX_C) status = WARNING;
-  else status = SAFE;
+  else if (temperatureC < SAFE_MIN_C) status = CRITICAL_LOW;
+  else if (temperatureC < SAFE_MAX_C) status = SAFE;
+  else if (temperatureC < WARNING_MAX_C) status = WARNING;
+  else status = CRITICAL_HIGH;
 }
 
 void updateOutputs() {
@@ -76,8 +78,8 @@ void updateOutputs() {
   noTone(BUZZER_PIN);
   if (status == SAFE) digitalWrite(GREEN_LED, HIGH);
   if (status == WARNING) digitalWrite(YELLOW_LED, HIGH);
-  if (status == CRITICAL || status == SENSOR_ERROR) digitalWrite(RED_LED, HIGH);
-  if (status == CRITICAL) tone(BUZZER_PIN, 2000);
+  if (status == CRITICAL_LOW || status == CRITICAL_HIGH || status == SENSOR_ERROR) digitalWrite(RED_LED, HIGH);
+  if (status == CRITICAL_LOW || status == CRITICAL_HIGH) tone(BUZZER_PIN, 2000);
 }
 
 void updateLcd() {
@@ -118,8 +120,8 @@ bool hasPlaceholderConfig() {
     Serial.println("Upload blocked: DEVICE_KEY is missing or too short");
     return true;
   }
-  if (!String(TRACKING_CODE).startsWith("TVX-")) {
-    Serial.println("Upload blocked: TRACKING_CODE should match an existing shipment");
+  if (String(DEVICE_ID).length() < 3 || String(DEVICE_ID).indexOf(" ") >= 0) {
+    Serial.println("Upload blocked: DEVICE_ID must be set and cannot contain spaces");
     return true;
   }
   return false;
@@ -152,9 +154,9 @@ bool uploadTemperature() {
   }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Key", DEVICE_KEY);
-  String body = String("{\"tracking_code\":\"") + TRACKING_CODE
+  String body = String("{\"device_id\":\"") + DEVICE_ID
     + "\",\"temperature\":" + String(temperatureC, 2)
-    + ",\"temperature_status\":\"" + statusText() + "\"}";
+    + ",\"status\":\"" + statusText() + "\"}";
   int statusCode = http.POST(body);
   String response = http.getString();
   http.end();
@@ -166,7 +168,7 @@ bool uploadTemperature() {
   Serial.println(lastUploadSucceeded ? "OK" : response);
   if (lastUploadSucceeded) {
     Serial.print("Saved reading for ");
-    Serial.print(TRACKING_CODE);
+    Serial.print(DEVICE_ID);
     Serial.print(" at ");
     Serial.print(temperatureC, 2);
     Serial.println(" C");
