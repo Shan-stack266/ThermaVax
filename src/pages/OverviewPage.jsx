@@ -42,6 +42,6 @@ export default function OverviewPage({ user, refreshKey, openBatch, openShipment
     {!rider && <DashboardCharts charts={data.charts} />}
     <HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} />
     <div className="overview-grid">{rider ? <AlertPanel alerts={data.alerts} onShipment={openShipment} /> : staff ? <><AlertPanel alerts={data.alerts} onShipment={openShipment} /><WarningPanel warnings={data.warnings} onBatch={openBatch} /></> : <><WarningPanel warnings={data.warnings} onBatch={openBatch} /><AlertPanel alerts={data.alerts} onShipment={openShipment} /></>}</div>
-    <ShipmentTable shipments={staff || rider ? data.active_shipments : data.recent_shipments} title={staff || rider ? 'Active shipment queue' : 'Recent shipments'} compact onShipment={openShipment} onViewAll={() => navigate('shipments')} riderMode={rider} showAssignmentStatus={!staff} />
+    <ShipmentTable shipments={staff || rider ? data.active_shipments : data.recent_shipments} title={staff || rider ? 'Active shipment queue' : 'Recent shipments'} compact onShipment={openShipment} onViewAll={() => navigate('shipments')} riderMode={rider} showAssignmentStatus={rider} />
   </>;
 }
