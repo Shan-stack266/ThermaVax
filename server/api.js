@@ -508,7 +508,8 @@ router.get('/dashboard', authenticate, route(async (req, res) => {
 
 router.get('/sensor-readings/latest', authenticate, route(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
-  res.json(unwrap(await req.supabase.from('sensor_readings')
+  const client = createServiceClient() || req.supabase;
+  res.json(unwrap(await client.from('sensor_readings')
     .select('id, device_id, temperature, status, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)));
