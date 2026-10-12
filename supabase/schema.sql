@@ -132,6 +132,13 @@ create table if not exists public.alert_acknowledgements (
   note text not null check (char_length(note) between 1 and 1000)
 );
 
+create table if not exists public.alert_views (
+  alert_id uuid not null references public.alerts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  viewed_at timestamptz not null default now(),
+  primary key (alert_id, user_id)
+);
+
 create table if not exists public.rider_assignments (
   shipment_id uuid primary key references public.shipments(id) on delete cascade,
   rider_id uuid not null references public.profiles(id),
@@ -178,6 +185,7 @@ create unique index if not exists idx_shipments_active_esp32_device
 on public.shipments(esp32_device_id)
 where esp32_device_id is not null and status <> 'Delivered';
 create index if not exists idx_alert_acknowledgements_user on public.alert_acknowledgements(acknowledged_by, acknowledged_at desc);
+create index if not exists idx_alert_views_user on public.alert_views(user_id, viewed_at desc);
 create index if not exists idx_rider_assignments_rider on public.rider_assignments(rider_id, status);
 
 -- Keep public user profiles synchronized with Supabase Auth.
@@ -851,6 +859,7 @@ grant select on public.shipment_batches to authenticated;
 grant select, insert on public.temperature_readings to authenticated;
 grant select on public.alerts to authenticated;
 grant select, insert on public.alert_acknowledgements to authenticated;
+grant select, insert, update on public.alert_views to authenticated;
 grant select, insert, update on public.rider_assignments to authenticated;
 grant select, insert on public.gps_readings to authenticated;
 grant select, insert on public.deliveries to authenticated;
@@ -861,7 +870,7 @@ grant select on public.batch_inventory, public.shipment_overview, public.report_
 grant all on table
   public.profiles, public.batches, public.shipments, public.shipment_batches,
   public.temperature_readings, public.alerts, public.alert_acknowledgements,
-  public.rider_assignments, public.gps_readings, public.deliveries
+  public.alert_views, public.rider_assignments, public.gps_readings, public.deliveries
 to service_role;
 
 -- Profiles: users see themselves; administrators manage all profiles.
@@ -933,6 +942,18 @@ using ((select private.is_active_user()));
 drop policy if exists alert_acknowledgements_insert on public.alert_acknowledgements;
 create policy alert_acknowledgements_insert on public.alert_acknowledgements for insert to authenticated
 with check ((select private.is_active_user()) and acknowledged_by = (select auth.uid()));
+
+alter table public.alert_views enable row level security;
+drop policy if exists alert_views_select on public.alert_views;
+create policy alert_views_select on public.alert_views for select to authenticated
+using ((select private.is_active_user()) and user_id = (select auth.uid()));
+drop policy if exists alert_views_insert on public.alert_views;
+create policy alert_views_insert on public.alert_views for insert to authenticated
+with check ((select private.is_active_user()) and user_id = (select auth.uid()));
+drop policy if exists alert_views_update on public.alert_views;
+create policy alert_views_update on public.alert_views for update to authenticated
+using ((select private.is_active_user()) and user_id = (select auth.uid()))
+with check ((select private.is_active_user()) and user_id = (select auth.uid()));
 
 alter table public.rider_assignments enable row level security;
 drop policy if exists rider_assignments_select on public.rider_assignments;

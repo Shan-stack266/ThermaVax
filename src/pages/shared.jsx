@@ -26,7 +26,7 @@ export function ShipmentTable({ shipments, title, compact = false, onShipment, o
     { key: 'esp32_device_id', label: 'ESP32', render: item => item.esp32_device_id ? <><strong>{item.esp32_device_id}</strong><span className="mono">{item.device_connection}</span></> : 'Not assigned' },
     { key: 'expected_delivery_date', label: 'Expected', render: item => formatDate(item.expected_delivery_date) },
     { key: 'current_temperature', label: 'Temperature', render: temperatureCell },
-    { key: 'active_alerts', label: 'Alerts', render: item => item.active_alerts ? <StatusBadge>{`${item.active_alerts} Active`}</StatusBadge> : 'None' },
+    { key: 'active_alerts', label: 'New alerts', render: item => item.active_alerts ? <StatusBadge>{`${item.active_alerts} New`}</StatusBadge> : 'None' },
     { key: 'status', label: 'Status', render: riderStatusCell },
     { key: 'action', label: '', sortable: false, render: item => <div className="row-actions"><button className="text-button" onClick={() => onShipment(item.id)}>View</button>{showRiderDecision(item) && onAccept && <button type="button" className="secondary" onClick={() => onAccept(item)}>Accept</button>}{showRiderDecision(item) && onReject && <button type="button" className="secondary" onClick={() => onReject(item)}>Reject</button>}{onDelete && <button type="button" className="icon-button delete-button" aria-label={`Delete shipment ${item.tracking_code}`} title={item.status === 'Delivered' ? 'Delivered shipments are retained for delivery records' : 'Delete shipment'} disabled={deletingId != null || item.status === 'Delivered'} onClick={() => onDelete(item)}><Icon name="trash-2" /></button>}</div> }
   ];
@@ -43,5 +43,5 @@ export function WarningPanel({ warnings, onBatch }) {
 }
 
 export function AlertPanel({ alerts, onShipment }) {
-  return <section className="panel"><PanelHeader title="Temperature alerts" description="Readings outside assigned batch ranges" /><div className="list">{alerts.length ? alerts.map(alert => <button className="list-row" key={alert.id} onClick={() => onShipment(alert.shipment_id)}><span><strong>{alert.tracking_code}</strong><small>{alert.origin} to {alert.destination}</small></span><span><StatusBadge>Active</StatusBadge><small>{alert.temperature} C</small></span></button>) : <div className="compact-empty">No active temperature alerts</div>}</div></section>;
+  return <section className="panel alert-overview-panel"><PanelHeader title="New temperature alerts" description="Unviewed shipment readings outside assigned ranges" /><div className="list">{alerts.length ? alerts.map(alert => <button className="list-row alert-list-row" key={alert.id} onClick={() => onShipment(alert.shipment_id)}><span><strong>{alert.tracking_code}</strong><small>{alert.origin} to {alert.destination}</small></span><span><StatusBadge>New</StatusBadge><small>{alert.temperature} C</small></span></button>) : <div className="compact-empty">No new temperature alerts</div>}</div></section>;
 }

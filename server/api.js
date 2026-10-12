@@ -143,6 +143,17 @@ async function addRiderAssignmentState(client, shipments) {
   });
 }
 
+async function alertViewsForUser(client, userId, alertIds = null) {
+  let query = client.from('alert_views').select('alert_id, viewed_at').eq('user_id', userId);
+  if (Array.isArray(alertIds)) {
+    if (!alertIds.length) return new Map();
+    query = query.in('alert_id', alertIds);
+  }
+  const result = await query;
+  if (result.error?.code === 'PGRST205') return new Map();
+  return new Map(unwrap(result).map(item => [item.alert_id, item.viewed_at]));
+}
+
 async function listShipments(client, activeOnly = false) {
   let query = client.from('shipment_overview').select('*').order('created_at', { ascending: false });
   if (activeOnly) query = query.neq('status', 'Delivered');
@@ -491,7 +502,14 @@ router.get('/dashboard', authenticate, route(async (req, res) => {
   const riderName = req.user?.role === 'rider' ? req.user.email.split('@')[0].replace(/[._-]+/g, ' ').toLowerCase() : '';
   const assignedToRider = item => !riderName || String(item.assigned_personnel || '').toLowerCase().includes(riderName);
   const alerts = unwrap(alertResult).map(flattenShipment).filter(assignedToRider);
-  const activeShipments = await addRiderAssignmentState(req.supabase, shipments.filter(item => item.status !== 'Delivered' && assignedToRider(item)));
+  const viewedAlerts = await alertViewsForUser(req.supabase, req.user.id, alerts.map(alert => alert.id));
+  const newAlerts = alerts.filter(alert => !viewedAlerts.has(alert.id));
+  const newAlertCountByShipment = newAlerts.reduce((counts, alert) => {
+    counts.set(alert.shipment_id, (counts.get(alert.shipment_id) || 0) + 1);
+    return counts;
+  }, new Map());
+  const activeShipments = (await addRiderAssignmentState(req.supabase, shipments.filter(item => item.status !== 'Delivered' && assignedToRider(item))))
+    .map(shipment => ({ ...shipment, active_alerts: newAlertCountByShipment.get(shipment.id) || 0 }));
   const inventoryByVaccine = batches.reduce((totals, batch) => {
     const vaccine = batch.vaccine_name || 'Unnamed vaccine';
     totals.set(vaccine, (totals.get(vaccine) || 0) + Number(batch.available_quantity || 0));
@@ -511,7 +529,7 @@ router.get('/dashboard', authenticate, route(async (req, res) => {
       batches: batches.length,
       available_doses: batches.reduce((sum, batch) => sum + Number(batch.available_quantity), 0),
       active_shipments: activeShipments.length,
-      active_alerts: alerts.length,
+      active_alerts: newAlerts.length,
       expiring: batches.filter(item => item.expiration_status !== 'Safe').length
     },
     charts: {
@@ -528,7 +546,7 @@ router.get('/dashboard', authenticate, route(async (req, res) => {
       ]
     },
     warnings: batches.filter(item => item.expiration_status !== 'Safe').slice(0, 8),
-    alerts: alerts.slice(0, 8),
+    alerts: newAlerts.slice(0, 8),
     active_shipments: activeShipments,
     recent_shipments: shipments.slice(0, 5)
   });
@@ -807,34 +825,33 @@ router.get('/alerts', authenticate, route(async (req, res) => {
   const alerts = unwrap(await req.supabase.from('alerts')
     .select('*, shipments!inner(tracking_code, origin, destination)')
     .order('status').order('recorded_at', { ascending: false }));
-  const acknowledgementResult = await req.supabase.from('alert_acknowledgements').select('*');
-  // Keep existing deployments readable until the one-time workspace migration is applied.
-  const acknowledgements = acknowledgementResult.error?.code === 'PGRST205'
-    ? []
-    : unwrap(acknowledgementResult);
-  const acknowledgementByAlert = new Map(acknowledgements.map(item => [item.alert_id, item]));
-  res.json(alerts.map(alert => ({ ...flattenShipment(alert), acknowledgement: acknowledgementByAlert.get(alert.id) || null })));
+  const viewsByAlert = await alertViewsForUser(req.supabase, req.user.id, alerts.map(alert => alert.id));
+  res.json(alerts.map(alert => ({ ...flattenShipment(alert), viewed_at: viewsByAlert.get(alert.id) || null })));
 }));
 
-router.post('/alerts/:id/acknowledge', authenticate, requireRole('admin', 'staff', 'rider'), route(async (req, res) => {
-  const note = text(req.body.note, 'Acknowledgement note', true, 1000);
-  const tableCheck = await req.supabase.from('alert_acknowledgements').select('alert_id').limit(1);
-  if (tableCheck.error?.code === 'PGRST205') {
-    throw httpError('Alert acknowledgement is not configured. Run supabase/staff-workspace-enhancements-migration.sql first.', 503);
-  }
-  const alert = unwrap(await req.supabase.from('alerts').select('id, status').eq('id', req.params.id).maybeSingle());
-  if (!alert) throw httpError('Alert not found', 404);
-  if (alert.status !== 'Active') throw httpError('Only active alerts can be acknowledged', 409);
-  const acknowledgement = unwrap(await req.supabase.from('alert_acknowledgements').upsert({
+router.post('/alerts/viewed', authenticate, route(async (req, res) => {
+  const ids = [...new Set((Array.isArray(req.body.alert_ids) ? req.body.alert_ids : [])
+    .map(id => String(id || '').trim())
+    .filter(id => /^[a-f0-9-]{36}$/i.test(id)))]
+    .slice(0, 100);
+  if (!ids.length) return res.json({ viewed: 0 });
+  const activeAlerts = unwrap(await req.supabase.from('alerts')
+    .select('id')
+    .eq('status', 'Active')
+    .in('id', ids));
+  const rows = activeAlerts.map(alert => ({
     alert_id: alert.id,
-    acknowledged_by: req.user.id,
-    note
-  }, { onConflict: 'alert_id' }).select().single());
-  res.status(201).json(acknowledgement);
-}));
-
-router.patch('/alerts/:id/resolve', authenticate, requireRole('admin', 'staff'), route(async (req, res) => {
-  res.json(unwrap(await req.supabase.rpc('resolve_alert', { p_alert_id: req.params.id })));
+    user_id: req.user.id,
+    viewed_at: new Date().toISOString()
+  }));
+  if (!rows.length) return res.json({ viewed: 0 });
+  const result = await req.supabase.from('alert_views')
+    .upsert(rows, { onConflict: 'alert_id,user_id' })
+    .select('alert_id');
+  if (result.error?.code === 'PGRST205') {
+    throw httpError('Alert viewed tracking is not configured. Run supabase/alert-views-migration.sql first.', 503);
+  }
+  res.status(201).json({ viewed: unwrap(result).length });
 }));
 
 router.get('/map', authenticate, route(async (req, res) => {

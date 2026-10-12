@@ -14,7 +14,7 @@ export function todayLabel() {
 }
 
 export function statusClass(value) {
-  return String(value || '').toLowerCase().replaceAll(' ', '-');
+  return String(value || '').toLowerCase().replaceAll(/[\s_]+/g, '-');
 }
 
 export function formValues(form) {

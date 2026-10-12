@@ -392,7 +392,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 32px;
+  margin-bottom: 22px;
 }
 
 .stats.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -404,7 +404,9 @@ select:focus-visible {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 52%),
+    var(--surface);
   box-shadow: var(--shadow-sm);
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
@@ -413,10 +415,11 @@ select:focus-visible {
   position: absolute;
   right: 16px;
   bottom: 14px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  transform: rotate(10deg);
   content: '';
 }
 
@@ -431,6 +434,8 @@ select:focus-visible {
 .stat-label [data-lucide] { color: var(--primary); }
 
 .stat strong {
+  position: relative;
+  z-index: 1;
   display: block;
   margin-top: 17px;
   font-size: 30px;
@@ -454,8 +459,16 @@ select:focus-visible {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(280px, .95fr) minmax(320px, 1.05fr);
   gap: 16px;
+  margin-bottom: 24px;
+}
+
+.overview-device-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
+  gap: 16px;
+  align-items: start;
   margin-bottom: 24px;
 }
 
@@ -715,7 +728,14 @@ select:focus-visible {
 
 .hardware-panel {
   overflow: hidden;
-  margin-bottom: 24px;
+  margin-bottom: 0;
+}
+
+.hardware-panel,
+.alert-overview-panel {
+  background:
+    linear-gradient(180deg, var(--surface-soft), var(--surface) 38%),
+    var(--surface);
 }
 
 .hardware-metrics {
@@ -928,6 +948,7 @@ td strong { display: block; font-size: 12px; }
 .status.confirmed,
 .status.admin,
 .status.staff { color: var(--success); }
+.status.warning,
 .status.expiring-soon,
 .status.preparing,
 .status.dispatched,
@@ -936,9 +957,12 @@ td strong { display: block; font-size: 12px; }
 .status.quarantined,
 .status.depleted,
 .status.active,
-.status.critical,
+.status.new,
+.status.high,
+.status.critically-low,
 .status.critical-low,
 .status.critical-high,
+.status.critical,
 .status.sensor-error,
 .status.rejected,
 .status.temperature-alert { color: var(--red); }
@@ -1020,6 +1044,22 @@ td strong { display: block; font-size: 12px; }
 .list-row strong,
 .list-row small { display: block; }
 .list-row small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+
+.alert-list-row {
+  position: relative;
+}
+
+.alert-list-row::before {
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--red);
+  content: '';
+}
+
+.alert-list-row > span:first-child {
+  padding-left: 2px;
+}
 
 .toolbar {
   display: grid;
@@ -1471,6 +1511,7 @@ td strong { display: block; font-size: 12px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overview-grid,
+  .overview-device-grid,
   .modal-columns,
   .shipment-summary,
   .shipment-detail-layout { grid-template-columns: 1fr; }
