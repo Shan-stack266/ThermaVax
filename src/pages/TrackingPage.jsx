@@ -29,7 +29,7 @@ function ShipmentTracking({ shipment }) {
         <div><span>Temperature status</span><StatusBadge>{shipment.temperature_status}</StatusBadge></div>
         <div><span>Temperature updated</span><strong>{formatDate(shipment.temperature_recorded_at)}</strong></div>
       </div>
-      {shipment.reading_stale && <div className="compact-empty stale-reading">Latest hardware reading is stale. Check device power, Wi-Fi, and API access.</div>}
+      {shipment.reading_stale && <div className="compact-empty stale-reading">Stale hardware reading</div>}
     </section>
     <section className="panel tracking-section"><PanelHeader title="Vaccine batches" description={`${shipment.total_quantity} doses assigned`} /><div className="list">{shipment.batches.map(batch => <div className="list-row static" key={batch.batch_number}><span><strong>{batch.vaccine_name}</strong><small>Batch {batch.batch_number}</small></span><span><strong>{batch.assigned_quantity} doses</strong><small>{batch.min_temperature} to {batch.max_temperature} C</small></span></div>)}</div></section>
     {shipment.delivery && <section className="panel tracking-section"><PanelHeader title="Delivery confirmation" /><div className="detail-grid"><DetailItem label="Delivered">{formatDate(shipment.delivery.delivered_at)}</DetailItem><DetailItem label="Condition">{shipment.delivery.condition}</DetailItem><DetailItem label="Temperature status"><StatusBadge>{shipment.delivery.temperature_status}</StatusBadge></DetailItem></div></section>}

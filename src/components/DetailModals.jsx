@@ -13,7 +13,7 @@ export function BatchDetailModal({ id, onClose, openShipment, notify }) {
   if (error) return <Modal title="Vaccine batch" subtitle="Tracking details unavailable." onClose={onClose}><ErrorState message={error} /></Modal>;
   return <Modal title={`${batch.vaccine_name} / ${batch.batch_number}`} subtitle="Batch tracking and inventory details" wide onClose={onClose}>
     <div className="detail-grid"><DetailItem label="Batch ID">{batch.id}</DetailItem><DetailItem label="Available quantity">{batch.available_quantity} of {batch.quantity}</DetailItem><DetailItem label="Manufactured">{formatDate(batch.manufacturing_date, false)}</DetailItem><DetailItem label="Expires">{formatDate(batch.expiration_date, false)}</DetailItem><DetailItem label="Required range">{batch.min_temperature} to {batch.max_temperature} C</DetailItem><DetailItem label="Expiration"><StatusBadge>{batch.expiration_status}</StatusBadge></DetailItem></div>
-    <div className="qr-section"><img src={apiUrl(`/api/qr/${encodeURIComponent(batch.public_token)}`)} alt={`QR code for batch ${batch.batch_number}`} /><div><h3>Batch QR tracking</h3><p>Scan to open this batch&apos;s vaccine, shipment, temperature, and delivery information.</p></div></div>
+    <div className="qr-section"><img src={apiUrl(`/api/qr/${encodeURIComponent(batch.public_token)}`)} alt={`QR code for batch ${batch.batch_number}`} /><div><h3>Batch QR tracking</h3></div></div>
     <div className="modal-section"><h3>Assigned shipments</h3>{batch.shipments.length ? batch.shipments.map(item => <button className="list-row" key={item.id} onClick={() => openShipment(item.id)}><span><strong>{item.tracking_code}</strong><small>{item.origin} to {item.destination}</small></span><span><StatusBadge>{item.status}</StatusBadge><small>{item.quantity} doses</small></span></button>) : <div className="compact-empty">This batch has not been assigned to a shipment.</div>}</div>
   </Modal>;
 }
@@ -90,10 +90,10 @@ function DeliveryPanel({ shipment, submit, error, userRole }) {
     </div></section>;
   }
   if (shipment.status !== 'Arrived') {
-    return <section className="modal-section"><h3>Delivery</h3><div className="compact-empty">Delivery confirmation is available once this shipment has arrived.</div></section>;
+    return <section className="modal-section"><h3>Delivery</h3><div className="compact-empty">Delivery unavailable</div></section>;
   }
   if (userRole === 'staff') {
-    return <section className="modal-section"><h3>Delivery</h3><div className="compact-empty">Delivery confirmation is restricted to authorized delivery users. Staff can monitor this shipment only.</div></section>;
+    return <section className="modal-section"><h3>Delivery</h3><div className="compact-empty">Delivery restricted</div></section>;
   }
   return <section className="modal-section"><h3>Delivery</h3><form className="stack-form" onSubmit={submit('delivery', `/api/shipments/${shipment.id}/delivery`)}>
     <FormMessage>{error}</FormMessage>
@@ -119,7 +119,7 @@ function ShipmentDetailContent({ shipment, mutate, userRole }) {
     <section className="modal-section shipment-temperature-panel">
       <div className="section-minihead"><h3>Temperature monitoring</h3>{shipment.current_temperature !== null && <StatusBadge>{shipment.current_temperature} C</StatusBadge>}</div>
       <TemperatureSummary shipment={shipment} />
-      {shipment.reading_stale && <div className="compact-empty stale-reading">Latest hardware reading is stale. Check device power, Wi-Fi, and API access.</div>}
+      {shipment.reading_stale && <div className="compact-empty stale-reading">Stale hardware reading</div>}
       <TemperatureGraph readings={shipment.temperature_history} range={shipment.temperature_range} />
     </section>
     <div className="shipment-side-panel">
