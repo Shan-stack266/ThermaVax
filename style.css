@@ -456,18 +456,6 @@ select:focus-visible {
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 
-.stat::after {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  transform: rotate(10deg);
-  content: '';
-}
-
 .stat:hover {
   border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
   transform: translateY(-2px);
