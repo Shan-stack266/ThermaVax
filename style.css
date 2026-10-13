@@ -70,6 +70,36 @@ html[data-theme='dark'] body {
   background: linear-gradient(180deg, #08151f 0%, var(--paper) 320px), var(--paper);
 }
 
+html[data-theme='dark'] .topbar,
+html[data-theme='dark'] .panel {
+  border-color: var(--line);
+  background: rgba(19, 38, 49, .92);
+  box-shadow: var(--shadow-sm);
+}
+
+html[data-theme='dark'] .topbar {
+  background: rgba(19, 38, 49, .86);
+}
+
+html[data-theme='dark'] .secondary,
+html[data-theme='dark'] .login-form-wrap {
+  background: var(--surface);
+}
+
+html[data-theme='dark'] .dashboard-chart-tabs,
+html[data-theme='dark'] .data-toolbar,
+html[data-theme='dark'] .alert-time-toolbar,
+html[data-theme='dark'] th {
+  background: var(--surface-soft);
+}
+
+html[data-theme='dark'] .hardware-panel,
+html[data-theme='dark'] .alert-overview-panel {
+  background:
+    linear-gradient(180deg, var(--surface-soft), var(--surface) 42%),
+    var(--surface);
+}
+
 body.modal-open { overflow: hidden; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
