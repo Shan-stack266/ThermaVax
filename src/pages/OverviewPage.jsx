@@ -71,6 +71,11 @@ export default function OverviewPage({ user, refreshKey, openBatch, openShipment
   if (error) return <ErrorState message={error} />;
   const staff = user.role === 'staff';
   const rider = user.role === 'rider';
+  const monitoringPanels = rider
+    ? <AlertPanel alerts={data.alerts} onShipment={openShipment} />
+    : staff
+      ? <><HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} /><AlertPanel alerts={data.alerts} onShipment={openShipment} /><WarningPanel warnings={data.warnings} onBatch={openBatch} /></>
+      : <><HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} /><WarningPanel warnings={data.warnings} onBatch={openBatch} /><AlertPanel alerts={data.alerts} onShipment={openShipment} /></>;
   return <>
     <SectionHeading title={staff ? 'Operations workspace' : rider ? 'Rider workspace' : 'Network overview'} description={staff ? 'Active shipment conditions, delivery progress, and exception queues.' : rider ? 'Assigned deliveries, temperature status, and exception queues.' : 'Live inventory, shipment, expiration, and temperature status.'} />
     <div className={`stats ${staff || rider ? '' : 'five'}`}>
@@ -80,12 +85,12 @@ export default function OverviewPage({ user, refreshKey, openBatch, openShipment
       {!rider && <Stat label="Expiration warnings" value={data.counts.expiring} tone={data.counts.expiring ? 'warning' : ''} />}
       <Stat label="New alerts" value={data.counts.active_alerts} tone={data.counts.active_alerts ? 'danger' : ''} />
     </div>
-    {!rider && <DashboardCharts charts={data.charts} />}
-    <div className="overview-device-grid">
+    <div className={`overview-primary-grid ${rider ? 'rider-overview-grid' : ''}`}>
+      {!rider && <DashboardCharts charts={data.charts} />}
       <SensorReadingsPanel state={sensorReadings} />
-      <HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} />
+      {rider && <HardwareStatusPanel shipments={data.active_shipments} onShipment={openShipment} />}
     </div>
-    <div className="overview-grid">{rider ? <AlertPanel alerts={data.alerts} onShipment={openShipment} /> : staff ? <><AlertPanel alerts={data.alerts} onShipment={openShipment} /><WarningPanel warnings={data.warnings} onBatch={openBatch} /></> : <><WarningPanel warnings={data.warnings} onBatch={openBatch} /><AlertPanel alerts={data.alerts} onShipment={openShipment} /></>}</div>
+    <div className={`overview-secondary-grid ${rider ? 'single' : ''}`}>{monitoringPanels}</div>
     <ShipmentTable shipments={staff || rider ? data.active_shipments : data.recent_shipments} title={staff || rider ? 'Active shipment queue' : 'Recent shipments'} compact onShipment={openShipment} onViewAll={() => navigate('shipments')} riderMode={rider} showAssignmentStatus={rider} />
   </>;
 }

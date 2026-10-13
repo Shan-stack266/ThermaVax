@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useApiData from '../hooks/useApiData';
 import useSensorReadings from '../hooks/useSensorReadings';
 import DataTable from '../components/DataTable';
-import { EmptyState, ErrorState, LoadingState, PanelHeader, SectionHeading, StatusBadge } from '../components/Common';
+import { EmptyState, ErrorState, LoadingState, PanelHeader, SectionHeading, Stat, StatusBadge } from '../components/Common';
 import { api } from '../services/api';
 import { formatDate } from '../utils/format';
 
@@ -68,6 +68,9 @@ export default function AlertsPage({ refreshKey, onChanged, openShipment, notify
   const deviceAlerts = latestUnsafeDeviceReadings(sensorReadings.readings);
   const filteredAlerts = sortByTime((alerts || []).filter(alert => withinDateRange(alert.recorded_at, alertFrom, alertTo)), 'recorded_at', alertSort);
   const filteredDeviceAlerts = sortByTime(deviceAlerts.filter(reading => withinDateRange(reading.created_at, deviceFrom, deviceTo)), 'created_at', deviceSort);
+  const critical = [...(alerts || []), ...deviceAlerts].filter(alert => /critical|sensor error|active/i.test(alert.status || '')).length;
+  const warning = deviceAlerts.filter(reading => reading.status === 'WARNING').length;
+  const viewed = (alerts || []).filter(alert => alert.viewed_at).length;
   const columns = [
     { key: 'tracking_code', label: 'Shipment', render: alert => <><button className="text-button flush" onClick={() => openShipment(alert.shipment_id)}>{alert.tracking_code}</button><span className="mono">{alert.origin} to {alert.destination}</span></> },
     { key: 'temperature', label: 'Reading', render: alert => <span className="temperature-unsafe">{alert.temperature} C</span> },
@@ -83,6 +86,7 @@ export default function AlertsPage({ refreshKey, onChanged, openShipment, notify
   ];
   return <>
     <SectionHeading title="Temperature alerts" description="Shipment excursions and live ESP32 device warnings." />
+    <div className="stats five"><Stat label="Shipment alerts" value={(alerts || []).length} tone={(alerts || []).length ? 'danger' : ''} /><Stat label="Device alerts" value={deviceAlerts.length} tone={deviceAlerts.length ? 'danger' : ''} /><Stat label="Critical" value={critical} tone={critical ? 'danger' : ''} /><Stat label="Warning" value={warning} tone={warning ? 'warning' : ''} /><Stat label="Viewed" value={viewed} /></div>
     {deviceAlerts.length > 0 && <section className="panel table-panel">
       <PanelHeader title="ESP32 device alerts" description="Latest standalone device readings that are not SAFE" action={<StatusBadge>{sensorReadings.realtimeStatus}</StatusBadge>} />
       <AlertTimeControls prefix="device-alerts" sortOrder={deviceSort} setSortOrder={setDeviceSort} from={deviceFrom} setFrom={setDeviceFrom} to={deviceTo} setTo={setDeviceTo} />

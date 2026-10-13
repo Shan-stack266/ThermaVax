@@ -4,7 +4,7 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import useApiData from '../hooks/useApiData';
-import { ErrorState, LoadingState, SectionHeading } from '../components/Common';
+import { ErrorState, LoadingState, PanelHeader, SectionHeading, Stat, StatusBadge } from '../components/Common';
 import { ShipmentTable } from './shared';
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow });
@@ -39,5 +39,37 @@ export default function MapPage({ refreshKey, openShipment }) {
   const { data: shipments, error, loading } = useApiData('/api/map', refreshKey, { refreshIntervalMs: 5000 });
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  return <><SectionHeading title="Active shipment locations" description="Latest GPS reading received for each active shipment." /><section className="panel map-panel"><ShipmentMap shipments={shipments} /></section><ShipmentTable shipments={shipments} title="Located shipments" onShipment={openShipment} /></>;
+  const reporting = shipments.filter(item => item.device_connection === 'Reporting').length;
+  const stale = shipments.filter(item => item.device_connection === 'Stale').length;
+  const alerting = shipments.filter(item => Number(item.active_alerts || 0) > 0).length;
+  return <>
+    <SectionHeading title="Active shipment locations" />
+    <div className="stats">
+      <Stat label="Tracked shipments" value={shipments.length} />
+      <Stat label="Reporting" value={reporting} />
+      <Stat label="Stale devices" value={stale} tone={stale ? 'warning' : ''} />
+      <Stat label="New alerts" value={alerting} tone={alerting ? 'danger' : ''} />
+    </div>
+    <div className="map-layout">
+      <section className="panel map-panel"><ShipmentMap shipments={shipments} /></section>
+      <section className="panel map-list-panel">
+        <PanelHeader title="Tracked shipments" />
+        <div className="list">
+          {shipments.length ? shipments.map(item => (
+            <button className="list-row" key={item.id} onClick={() => openShipment(item.id)}>
+              <span>
+                <strong>{item.tracking_code}</strong>
+                <small>{item.origin} to {item.destination}</small>
+              </span>
+              <span>
+                <StatusBadge>{item.device_connection || item.status}</StatusBadge>
+                <small>{item.active_alerts ? `${item.active_alerts} new alerts` : 'No new alerts'}</small>
+              </span>
+            </button>
+          )) : <div className="compact-empty">No active shipment has a GPS reading yet.</div>}
+        </div>
+      </section>
+    </div>
+    <ShipmentTable shipments={shipments} title="Located shipments" onShipment={openShipment} />
+  </>;
 }

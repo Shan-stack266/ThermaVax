@@ -485,6 +485,7 @@ select:focus-visible {
   margin-top: 20px;
   font-size: 32px;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .stat.danger { border-top: 3px solid var(--red); }
@@ -503,19 +504,43 @@ select:focus-visible {
   backdrop-filter: blur(8px);
 }
 
-.overview-grid {
+.overview-grid,
+.overview-secondary-grid {
   display: grid;
   grid-template-columns: minmax(280px, .95fr) minmax(320px, 1.05fr);
   gap: 16px;
   margin-bottom: 24px;
 }
 
+.overview-primary-grid,
 .overview-device-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
   gap: 16px;
   align-items: start;
   margin-bottom: 24px;
+}
+
+.overview-secondary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-secondary-grid.single,
+.rider-overview-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-secondary-grid.single > .panel {
+  grid-column: 1 / -1;
+}
+
+.overview-primary-grid .dashboard-chart {
+  margin-bottom: 0;
+}
+
+.overview-primary-grid > .panel,
+.overview-secondary-grid > .panel {
+  height: 100%;
 }
 
 .dashboard-chart {
@@ -1502,6 +1527,23 @@ td strong { display: block; font-size: 12px; }
 #shipment-map { height: 420px; background: var(--track); }
 #shipment-map .compact-empty { display: grid; place-items: center; height: 100%; }
 
+.delivery-workspace-grid,
+.map-layout {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.delivery-workspace-grid { grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); }
+.map-layout { grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); }
+.map-layout .map-panel { margin-bottom: 0; }
+.map-list-panel { overflow: hidden; }
+.map-list-panel .list {
+  max-height: 420px;
+  overflow: auto;
+}
+
 .report-tabs {
   display: flex;
   gap: 4px;
@@ -1592,10 +1634,15 @@ td strong { display: block; font-size: 12px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overview-grid,
+  .overview-primary-grid,
+  .overview-secondary-grid,
   .overview-device-grid,
+  .delivery-workspace-grid,
+  .map-layout,
   .modal-columns,
   .shipment-summary,
   .shipment-detail-layout { grid-template-columns: 1fr; }
+  .overview-secondary-grid.single > .panel { grid-column: auto; }
   .shipment-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shipment-live-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-grid,
